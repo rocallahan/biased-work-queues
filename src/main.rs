@@ -31,7 +31,7 @@ fn work_stage_2() {
 }
 
 /// Run test with naive crossbeam-channel work queue
-fn do_crossbeam(num_worker_threads: u64, total_work_units: u64) {
+fn do_crossbeam(num_worker_threads: u64, total_work_units: u64, batch_size: u64) {
     let (work_tx, work_rx) = crossbeam::channel::unbounded();
     let work_rx_ref = &work_rx;
     crossbeam::scope(move |s| {
@@ -40,13 +40,17 @@ fn do_crossbeam(num_worker_threads: u64, total_work_units: u64) {
                 .name(format!("crossbeam-{}", i))
                 .spawn(move |_| {
                     while let Ok(()) = work_rx_ref.recv() {
-                        work_stage_2();
+                        for _ in 0..batch_size {
+                            work_stage_2();
+                        }
                     }
                 })
                 .unwrap();
         }
-        for _ in 0..total_work_units {
-            work_stage_1(num_worker_threads);
+        for _ in 0..(total_work_units / batch_size) {
+            for _ in 0..batch_size {
+                work_stage_1(num_worker_threads);
+            }
             work_tx.send(()).unwrap();
         }
     })
@@ -54,7 +58,7 @@ fn do_crossbeam(num_worker_threads: u64, total_work_units: u64) {
 }
 
 /// Run test with a biased work queue based on crossbeam-channel
-fn do_crossbeam_biased(num_worker_threads: u64, total_work_units: u64) {
+fn do_crossbeam_biased(num_worker_threads: u64, total_work_units: u64, _batch_size: u64) {
     let (work_tx, work_rx) = crossbeam::channel::unbounded();
     let work_rxs = biased_work_queue(work_rx, num_worker_threads as usize);
     crossbeam::scope(move |s| {
@@ -79,15 +83,21 @@ fn do_crossbeam_biased(num_worker_threads: u64, total_work_units: u64) {
 }
 
 /// Run test with Rayon
-fn do_rayon(num_worker_threads: u64, total_work_units: u64) {
+fn do_rayon(num_worker_threads: u64, total_work_units: u64, batch_size: u64) {
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_worker_threads as usize)
         .thread_name(|i| format!("rayon-{}", i))
         .build()
         .unwrap();
-    for _ in 0..total_work_units {
-        work_stage_1(num_worker_threads);
-        pool.spawn(|| work_stage_2());
+    for _ in 0..(total_work_units / batch_size) {
+        for _ in 0..batch_size {
+            work_stage_1(num_worker_threads);
+        }
+        pool.spawn(move || {
+            for _ in 0..batch_size {
+                work_stage_2()
+            }
+        });
     }
 }
 
@@ -103,6 +113,8 @@ enum Subcommand {
 
 #[derive(StructOpt)]
 struct Opt {
+    #[structopt(long = "batch-size")]
+    batch_size: Option<u64>,
     #[structopt(subcommand)]
     subcommand: Subcommand,
 }
@@ -121,10 +133,11 @@ fn main() {
         Subcommand::Rayon => do_rayon,
         Subcommand::CrossbeamBiased => do_crossbeam_biased,
     };
+    let batch_size = opt.batch_size.unwrap_or(1);
     let mut handles = Vec::new();
     for _ in 0..simultaneous_pools {
         handles.push(thread::spawn(move || {
-            op(threads, total_work_units_per_pool)
+            op(threads, total_work_units_per_pool, batch_size)
         }));
     }
     for handle in handles {
