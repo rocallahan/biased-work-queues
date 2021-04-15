@@ -46,7 +46,7 @@ A serial producer produces a stream of work items. Those items are processed by 
 
 Under these conditions, a naive work queue implementation (and to a lesser extent, the less naive scheduling in Rayon) interacts poorly with the Linux CPU scheduler. The problem is that each thread pool has _num-cpus_ threads, many of which are waiting on the work queue at any given point in time, and every time a work item is added to the queue the kernel will wake a consumer thread (an *arbitrary* thread as far as I know), which will often only be able to process one item before going to sleep again. This waking and sleeping of threads causes a large number of context switches and task migrations.
 
-This scenario may seem contrived &emdash; why not just use a single thread pool instead of three identical pools? In practice, though, our pools are all doing different kinds of work, live in different processes and may have different lifetimes. Likewise, in this simple example you could reduce the thread pool size to fit the expected CPU utilization of each pool, but in practice, CPU utilization is unpredictable and variable.
+This scenario may seem contrived – why not just use a single thread pool instead of three identical pools? In practice, though, our pools are all doing different kinds of work, live in different processes and may have different lifetimes. Likewise, in this simple example you could reduce the thread pool size to fit the expected CPU utilization of each pool, but in practice, CPU utilization is unpredictable and variable.
 
 In this benchmark those context switches and migrations are immaterial, but in Pernosco's real-world workload they cause significant degradation of throughput.
 
