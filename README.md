@@ -89,6 +89,8 @@ A slightly more flexible approach is to improve the work queue consumption side:
 
 This approach leaves queue submission entirely unchanged. When a consumer thread needs more work, it pulls as many work items off the queue as it can without sleeping, up to a specified `BATCH_SIZE`. If there aren't any, it must sleep, but only the first thread sleeps on the queue itself. Other threads sleep waiting for the previous thread to signal that it is "overloaded" (i.e. that it was able to pull `BATCH_SIZE` items off the queue without sleeping).
 
-This is a very simple idea with a very simple and efficient implementation, and it works really well. There is no added latency, and in this benchmark it gives fewer context switches and task migrations than even Rayon with batching. Our Rust implementation is generic and can be applied to any kind of concurrent queue that supports blocking and non-blocking reads.
+This is a very simple idea with a very simple and efficient implementation, and it works really well. In this benchmark it gives fewer context switches and task migrations than even Rayon with batching. Our Rust implementation is generic and can be applied to any kind of concurrent queue that supports blocking and non-blocking reads.
+
+It doesn't entirely fix the latency/buffering penalty. When the consumer pool is very lightly loaded it does eliminate latency, because the first thread is able to pull and process items one at a time as they are submitted. But in general an item might have to wait for O(`BATCH_SIZE`) other items to be processed before it is processed (assuming the consumer pool as a whole is able to keep up with the producer).
 
 I'm sure we're not the first to invent this technique, but I don't remember reading about it before so I thought it was worth writing up.
