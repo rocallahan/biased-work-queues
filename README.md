@@ -80,7 +80,8 @@ One simple way to mitigate the problem is with batching. Simply submitting multi
 This certainly helps a lot, but I'm not entirely happy about it:
 * There is still significant context switching when we're not using Rayon.
 * Batching at submission time increases buffering and latency, which can be a problem.
-* That gets much worse if we have many producers.
+* That gets much worse if we have many producers. (This can be worked around with a shared buffer in front of the concurrent queue.)
+* Sometimes the consumer pool may be idle while the batch fills.
 * Responsibility for solving the problem lands on the producer, when it's really a consumer problem.
 
 ## Biased work queues
